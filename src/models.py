@@ -44,6 +44,7 @@ class ConvBlock(nn.Module):
         out_dim,
         kernel_size: int = 3,
         p_drop: float = 0.1,
+        #p_drop: float = 0.05,
     ) -> None:
         super().__init__()
         

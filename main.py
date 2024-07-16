@@ -28,12 +28,12 @@ def run(args: DictConfig):
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
-    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
+    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args,pin_memory=True)
     val_set = ThingsMEGDataset("val", args.data_dir)
-    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
+    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args,pin_memory=True)
     test_set = ThingsMEGDataset("test", args.data_dir)
     test_loader = torch.utils.data.DataLoader(
-        test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
+        test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers,pin_memory=True
     )
 
     # ------------------
@@ -60,6 +60,7 @@ def run(args: DictConfig):
         print(f"Epoch {epoch+1}/{args.epochs}")
         
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
+        #alpha = 1 # 正則化パラメータ
         
         model.train()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
@@ -69,7 +70,13 @@ def run(args: DictConfig):
             
             loss = F.cross_entropy(y_pred, y)
             train_loss.append(loss.item())
-            
+
+            # パラメータのL1ノルムを損失関数に足す
+            # l1 = torch.tensor(0., requires_grad=True)
+            # for w in model.parameters():
+            # l1 = l1 + torch.norm(w, 1)
+            # loss = loss + alpha*l1
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
