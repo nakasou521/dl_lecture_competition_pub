@@ -60,7 +60,7 @@ def run(args: DictConfig):
         print(f"Epoch {epoch+1}/{args.epochs}")
         
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
-        #alpha = 1 # 正則化パラメータ
+        alpha = 1 # 正則化パラメータ
         
         model.train()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
@@ -72,10 +72,10 @@ def run(args: DictConfig):
             train_loss.append(loss.item())
 
             # パラメータのL1ノルムを損失関数に足す
-            # l1 = torch.tensor(0., requires_grad=True)
-            # for w in model.parameters():
-            # l1 = l1 + torch.norm(w, 1)
-            # loss = loss + alpha*l1
+            l1 = torch.tensor(0., requires_grad=True)
+            for w in model.parameters():
+                l1 = l1 + torch.norm(w, 1)
+            loss = loss + alpha*l1
 
             optimizer.zero_grad()
             loss.backward()
