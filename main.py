@@ -28,25 +28,31 @@ def run(args: DictConfig):
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
-    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args,pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
     val_set = ThingsMEGDataset("val", args.data_dir)
-    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args,pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
     test_set = ThingsMEGDataset("test", args.data_dir)
     test_loader = torch.utils.data.DataLoader(
-        test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers,pin_memory=True
+        test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
 
     # ------------------
     #       Model
     # ------------------
+    
     model = BasicConvClassifier(
         train_set.num_classes, train_set.seq_len, train_set.num_channels
     ).to(args.device)
+    '''
+    model = BasicConvClassifier(
+        num_classes=train_set.num_classes, in_channels=train_set.num_channels, seq_len=train_set.seq_len
+    ).to(args.device)
+    '''
 
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=0.001)
 
     # ------------------
     #   Start training
@@ -55,56 +61,31 @@ def run(args: DictConfig):
     accuracy = Accuracy(
         task="multiclass", num_classes=train_set.num_classes, top_k=10
     ).to(args.device)
-    
-    torch.backends.cudnn.benchmark = True
       
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1}/{args.epochs}")
         
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
-        alpha = 1 # 正則化パラメータ
         
         model.train()
-        
-        scaler = torch.cuda.amp.GradScaler()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
-            X, y = X.to(args.device, non_blocking=True), y.to(args.device, non_blocking=True)
+            X, y = X.to(args.device), y.to(args.device)
 
-            optimizer.zero_grad()
             y_pred = model(X)
             
             loss = F.cross_entropy(y_pred, y)
-            
             train_loss.append(loss.item())
-
-            # パラメータのL1ノルムを損失関数に足す
-            l1 = torch.tensor(0., requires_grad=True)
-            for w in model.parameters():
-                l1 = l1 + torch.norm(w, 1)
-            loss = loss + alpha*l1
             
-            
-
-            
-            # backward
-            scaler.scale(loss).backward()
-            
-            # クリップ時に正しくできるように一度スケールを戻す
-            scaler.unscale_(optimizer)
-            
-            
-            # パラメタの更新
-            scaler.step(optimizer)
-            # スケールの更新
-            scaler.update()
-          
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
             
             acc = accuracy(y_pred, y)
             train_acc.append(acc.item())
 
         model.eval()
         for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
-            X, y = X.to(args.device, non_blocking=True), y.to(args.device, non_blocking=True)
+            X, y = X.to(args.device), y.to(args.device)
             
             with torch.no_grad():
                 y_pred = model(X)
